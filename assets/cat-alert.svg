@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 430" role="img" aria-label="少し気になるラグドール">
+  <rect width="720" height="430" rx="28" fill="#fff"/>
+  <path d="M190 250c-33-2-52-19-53-44-1-24 16-42 41-44 7-25 28-41 54-42l30-43 48 67 147-19c98-13 177 55 177 155v55H272c-47 0-76-33-82-85Z" fill="#fff1a6" stroke="#101417" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M178 162c-25 4-42 22-41 45 1 25 21 42 53 43 5 43 33 73 81 73h35v-76" fill="#fff7d3" stroke="#101417" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M232 120 199 167h64l-1-90Z" fill="#c7d4da" stroke="#101417" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M578 335v-93c0-44-32-77-72-77s-71 32-71 77v93" fill="none" stroke="#101417" stroke-width="14" stroke-linecap="round"/>
+  <path d="M173 191h28M223 191h28" stroke="#101417" stroke-width="10" stroke-linecap="round"/>
+  <path d="M152 216h58M157 234h58" stroke="#101417" stroke-width="7" stroke-linecap="round"/>
+  <path d="M304 323h124" stroke="#101417" stroke-width="14" stroke-linecap="round"/>
+  <path d="M610 83v72M610 190h.1" stroke="#e58f7f" stroke-width="18" stroke-linecap="round"/>
+  <path d="M458 129c79-7 146 43 168 111" stroke="#f8e176" stroke-width="12" stroke-linecap="round" opacity=".75"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 430" role="img" aria-label="くつろぐラグドール">
+  <rect width="720" height="430" rx="28" fill="#fff"/>
+  <path d="M191 242c-32-2-50-18-51-43-1-23 16-40 40-42 8-24 28-38 54-39l30-42 46 66 147-20c98-13 177 55 177 155v56H272c-47 0-76-33-81-91Z" fill="#fff1a6" stroke="#101417" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M183 157c-24 3-41 21-41 44 0 25 20 42 51 41 4 47 32 78 78 78h35v-77" fill="#fff7d3" stroke="#101417" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M229 118 197 164h63l4-88Z" fill="#c7d4da" stroke="#101417" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M577 333v-94c0-44-32-77-72-77-40 0-71 32-71 77v94" fill="none" stroke="#101417" stroke-width="14" stroke-linecap="round"/>
+  <path d="M176 188c17 9 31 9 43 0" fill="none" stroke="#101417" stroke-width="10" stroke-linecap="round"/>
+  <path d="M152 212h56M156 230h58" stroke="#101417" stroke-width="7" stroke-linecap="round"/>
+  <path d="M297 321h125" stroke="#101417" stroke-width="14" stroke-linecap="round"/>
+  <path d="M456 129c79-8 146 43 168 112" stroke="#f8e176" stroke-width="12" stroke-linecap="round" opacity=".75"/>
+</svg>

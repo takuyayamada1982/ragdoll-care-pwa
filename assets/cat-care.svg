@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 430" role="img" aria-label="ケア後のラグドール">
+  <rect width="720" height="430" rx="28" fill="#fff"/>
+  <path d="M193 248c-33-1-52-18-54-43-1-24 16-42 42-44 8-25 29-40 55-41l31-44 47 68 148-20c99-13 178 55 178 156v55H274c-47 0-76-33-81-87Z" fill="#fff1a6" stroke="#101417" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M181 161c-25 3-42 22-42 45 0 25 21 42 54 42 4 44 32 75 80 75h35v-76" fill="#fff7d3" stroke="#101417" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M236 120 203 167h64l5-91Z" fill="#c7d4da" stroke="#101417" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M582 335v-93c0-44-32-77-72-77-40 0-71 32-71 77v93" fill="none" stroke="#101417" stroke-width="14" stroke-linecap="round"/>
+  <path d="M178 193c17 9 32 9 45 0" fill="none" stroke="#101417" stroke-width="10" stroke-linecap="round"/>
+  <path d="M153 215h58M157 233h58" stroke="#101417" stroke-width="7" stroke-linecap="round"/>
+  <path d="M305 323h124" stroke="#101417" stroke-width="14" stroke-linecap="round"/>
+  <path d="m92 98 25 25M117 98l-25 25M116 260l25 25M141 260l-25 25M615 82l31 31M646 82l-31 31" stroke="#e58f7f" stroke-width="10" stroke-linecap="round"/>
+  <path d="M476 128c76-7 142 42 168 110" stroke="#f8e176" stroke-width="12" stroke-linecap="round" opacity=".75"/>
+</svg>

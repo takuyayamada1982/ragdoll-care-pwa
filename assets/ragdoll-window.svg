@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700" role="img" aria-label="Ragdoll cat by a window">
+  <defs>
+    <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#cfe9ee"/>
+      <stop offset=".7" stop-color="#f8f1df"/>
+    </linearGradient>
+    <linearGradient id="coat" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#f8f6ef"/>
+      <stop offset="1" stop-color="#d8e5e8"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="700" fill="#f7fbf8"/>
+  <rect x="70" y="56" width="760" height="408" rx="38" fill="url(#sky)"/>
+  <path d="M70 282h760M450 56v408" stroke="#f7fbf8" stroke-width="24"/>
+  <circle cx="706" cy="128" r="48" fill="#f0b67f" opacity=".8"/>
+  <path d="M0 462h900v238H0z" fill="#dfeadf"/>
+  <path d="M292 336 232 184c-6-17 12-31 27-21l126 82M606 336l60-152c6-17-12-31-27-21l-126 82" fill="#aabfc9"/>
+  <path d="M258 393c0-111 86-190 192-190s192 79 192 190c0 130-79 235-192 235S258 523 258 393Z" fill="url(#coat)"/>
+  <path d="M327 321c27-70 69-109 123-109s96 39 123 109c-38-27-76-39-123-39s-85 12-123 39Z" fill="#849ca7" opacity=".58"/>
+  <path d="M341 420c32 14 62 13 83-3M559 420c-32 14-62 13-83-3" fill="none" stroke="#263d46" stroke-width="22" stroke-linecap="round"/>
+  <path d="M427 463h46l-23 25Z" fill="#c97b71"/>
+  <path d="M450 486v34M396 529c38 29 70 29 108 0" fill="none" stroke="#263d46" stroke-width="15" stroke-linecap="round"/>
+  <path d="M139 464h142M155 516h130M761 464H619M745 516H615" stroke="#708a94" stroke-width="15" stroke-linecap="round" opacity=".72"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ragdoll Care icon">
+  <rect width="512" height="512" rx="112" fill="#f7fbf8"/>
+  <circle cx="256" cy="268" r="152" fill="#e9eef6"/>
+  <path d="M146 218 106 118c-5-13 8-25 20-18l94 54M366 218l40-100c5-13-8-25-20-18l-94 54" fill="#c8d8df"/>
+  <path d="M174 247c20-62 144-62 164 0 16 48-17 111-82 111s-98-63-82-111Z" fill="#f8f5ef"/>
+  <path d="M173 240c22-50 52-82 83-82s61 32 83 82c-24-15-49-21-83-21s-59 6-83 21Z" fill="#8da7b0" opacity=".55"/>
+  <path d="M204 270c19 8 32 8 45-1M308 270c-19 8-32 8-45-1" fill="none" stroke="#30454d" stroke-width="15" stroke-linecap="round"/>
+  <path d="M244 302h24l-12 13Z" fill="#d98375"/>
+  <path d="M256 315v18M224 338c22 18 42 18 64 0" fill="none" stroke="#30454d" stroke-width="10" stroke-linecap="round"/>
+  <path d="M126 308h78M134 342h76M386 308h-78M378 342h-76" stroke="#8aa0a7" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="377" cy="150" r="40" fill="#f0b67f"/>
+  <path d="M363 151h28M377 137v28" stroke="#fffaf3" stroke-width="12" stroke-linecap="round"/>
+</svg>

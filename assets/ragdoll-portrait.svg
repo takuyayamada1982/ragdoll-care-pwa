@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" role="img" aria-label="Ragdoll cat portrait">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#dcebe4"/>
+      <stop offset=".56" stop-color="#f6f2e9"/>
+      <stop offset="1" stop-color="#e6eff6"/>
+    </linearGradient>
+    <linearGradient id="fur" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#f8f5ef"/>
+      <stop offset="1" stop-color="#dfe9ec"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="900" fill="url(#bg)"/>
+  <circle cx="450" cy="450" r="314" fill="#fffaf3" opacity=".72"/>
+  <path d="M246 395 172 183c-9-26 19-49 42-34l164 106M654 395l74-212c9-26-19-49-42-34L522 255" fill="#bccdd6"/>
+  <path d="M244 454c0-145 94-251 206-251s206 106 206 251c0 154-91 274-206 274S244 608 244 454Z" fill="url(#fur)"/>
+  <path d="M312 345c30-91 78-143 138-143s108 52 138 143c-42-35-81-50-138-50s-96 15-138 50Z" fill="#8ba6b0" opacity=".62"/>
+  <path d="M302 500c42 18 83 16 111-4M598 500c-42 18-83 16-111-4" fill="none" stroke="#253f48" stroke-width="28" stroke-linecap="round"/>
+  <path d="M422 548h56l-28 30Z" fill="#ce7e73"/>
+  <path d="M450 577v44M381 632c48 38 90 38 138 0" fill="none" stroke="#253f48" stroke-width="18" stroke-linecap="round"/>
+  <path d="M185 563h162M198 625h159M715 563H553M702 625H543" stroke="#78919a" stroke-width="17" stroke-linecap="round" opacity=".78"/>
+  <path d="M294 723c82 66 230 66 312 0 33 57 19 110-42 137H336c-61-27-75-80-42-137Z" fill="#eef4f5"/>
+</svg>

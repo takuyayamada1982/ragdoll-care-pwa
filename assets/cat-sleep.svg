@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 430" role="img" aria-label="寝ているラグドール">
+  <rect width="720" height="430" rx="28" fill="#fff"/>
+  <path d="M157 285c-31-1-50-15-52-39-1-23 15-39 39-43 6-24 25-41 50-43l25-42 52 63 139-11c104-8 187 60 187 158v43H213c-31 0-52-27-56-86Z" fill="#fff1a6" stroke="#101417" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M146 202c-24 4-40 20-40 43 0 24 20 39 51 39 3 43 24 72 56 72h45c15 0 25-10 25-26" fill="#fff7d3" stroke="#101417" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M194 160 164 210h64l-9-92Z" fill="#c7d4da" stroke="#101417" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M542 371v-83c0-42-29-75-68-75s-69 33-69 75v83" fill="none" stroke="#101417" stroke-width="14" stroke-linecap="round"/>
+  <path d="M137 232c16 9 31 9 45 0" fill="none" stroke="#101417" stroke-width="10" stroke-linecap="round"/>
+  <path d="M110 151h32l-32 34h33M143 105h44l-44 48h45" fill="none" stroke="#101417" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M357 355h122" stroke="#101417" stroke-width="14" stroke-linecap="round"/>
+  <path d="M428 177c79 0 146 48 164 117" stroke="#f8e176" stroke-width="12" stroke-linecap="round" opacity=".75"/>
+</svg>
