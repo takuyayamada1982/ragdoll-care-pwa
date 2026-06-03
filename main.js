@@ -202,7 +202,7 @@
     }
 
     const savedFamilyId = getSavedActiveFamilyId();
-    const currentMembership = memberships.find((item) => item.family_id === savedFamilyId) || memberships[0];
+    const currentMembership = memberships.find((item) => item.family_id === savedFamilyId) || memberships[memberships.length - 1];
     setSavedActiveFamilyId(currentMembership.family_id);
 
     const { data: family, error: familyError } = await supabaseClient
@@ -1530,8 +1530,21 @@
       return;
     }
 
+    if (inviteCode) {
+      const invite = await verifyInviteCode(inviteCode);
+      if (!invite.ok) {
+        remote.loading = false;
+        showToast(invite.message);
+        authMode = "login";
+        render();
+        return;
+      }
+      savePendingInvite(inviteCode, fallbackName);
+    }
+
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
+      if (inviteCode) clearPendingInvite();
       remote.loading = false;
       showToast(`ログインエラー: ${error.message}`);
       render();
@@ -1539,17 +1552,6 @@
     }
     authSession = data.session;
     if (inviteCode) {
-      const invite = await verifyInviteCode(inviteCode);
-      if (!invite.ok) {
-        remote.loading = false;
-        showToast(invite.message);
-        await supabaseClient.auth.signOut();
-        authSession = null;
-        authMode = "login";
-        render();
-        return;
-      }
-      savePendingInvite(inviteCode, fallbackName);
       const joined = await joinPendingInvite();
       if (!joined) {
         remote.loading = false;
