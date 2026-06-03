@@ -1,4 +1,4 @@
-const CACHE_NAME = "ragdoll-care-pwa-v7";
+const CACHE_NAME = "ragdoll-care-pwa-v8";
 const CORE_ASSETS = [
   "./",
   "./index.html",

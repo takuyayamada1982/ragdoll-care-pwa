@@ -1372,6 +1372,14 @@
       showToast("メールアドレスとパスワードを入力してください");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showToast("メールアドレスの形式を確認してください");
+      return;
+    }
+    if (password.length < 6) {
+      showToast("パスワードは6文字以上にしてください");
+      return;
+    }
 
     remote.loading = true;
     render();
@@ -1381,6 +1389,7 @@
         email,
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}${window.location.pathname}`,
           data: { display_name: displayName }
         }
       });
