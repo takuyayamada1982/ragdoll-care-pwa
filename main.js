@@ -188,6 +188,14 @@
     }
 
     if (!memberships || memberships.length === 0) {
+      if (!getPendingInvite()) {
+        const createdFamilyId = await createDefaultFamilyForCurrentUser();
+        if (createdFamilyId) {
+          setSavedActiveFamilyId(createdFamilyId);
+          await loadRemoteData();
+          return;
+        }
+      }
       remote = { loading: false, ready: false, family: null, member: null, error: "" };
       render();
       return;
@@ -1647,6 +1655,29 @@
     setSavedActiveFamilyId(familyId);
     await loadRemoteData();
     showToast("家族に参加しました");
+  }
+
+  async function createDefaultFamilyForCurrentUser() {
+    const displayName = (authSession.user.user_metadata && authSession.user.user_metadata.display_name)
+      || displayNameFromEmail(authSession.user.email)
+      || "オーナー";
+    const { data: familyId, error } = await supabaseClient
+      .rpc("create_family_with_default_cat", {
+        family_name: "RAGDOLL-HOME",
+        member_display_name: displayName
+      });
+
+    if (error) {
+      setupErrorMessage = getFamilySetupErrorMessage(error, error);
+      remote.loading = false;
+      remote.ready = false;
+      showToast("初回の家族ページ作成で止まりました。Supabase SQLを確認してください");
+      render();
+      return "";
+    }
+
+    showToast("家族ページを作成しました。設定からファミリーIDを確認できます");
+    return familyId;
   }
 
   async function verifyInviteCode(inviteCode) {
