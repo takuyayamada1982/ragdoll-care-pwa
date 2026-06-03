@@ -5,7 +5,7 @@
 ## 起動
 
 ```bash
-npm start
+node server.js
 ```
 
 起動後に表示されるURLをスマホで開くと、スマホ前提のUIを確認できます。
@@ -26,6 +26,27 @@ http://127.0.0.1:4184/
 6. Actions完了後、PagesのURLでアプリを開けます。
 
 このワークスペース全体を1つのリポジトリとして使う場合は、ルート側の `.github/workflows/deploy-ragdoll-care.yml` が `ragdoll-care-pwa` フォルダだけを公開します。
+
+## Vercelで公開
+
+Vercelでは `vercel.json` により、このPWAを静的サイトとして公開します。`server.js` はローカル確認用なのでVercelには含めません。
+
+GitHub上に古い `app.js` や `server.js` が残っていると、Vercelがサーバーアプリと誤認することがあります。Vercelへ公開する場合は、GitHub上で以下を削除してください。
+
+- `app.js`
+- `server.js`
+- 古い `package.json` の `start` 設定
+
+Vercelの公開URLを使う場合は、Supabaseの `Authentication` → `URL Configuration` に以下を追加してください。
+
+- Site URL: Vercelの本番URL
+- Redirect URLs: Vercelの本番URL
+
+例:
+
+```text
+https://ragdoll-care-pwa.vercel.app/
+```
 
 ## MVPで確認できること
 
@@ -48,7 +69,7 @@ http://127.0.0.1:4184/
 https://ghdsgyqbnhnegbeyeqlt.supabase.co
 ```
 
-Publishable keyは `app.js` に設定済みです。Secret keyはブラウザ用アプリには入れません。
+Publishable keyは `main.js` に設定済みです。Secret keyはブラウザ用アプリには入れません。
 
 ### Supabase側で先に行うこと
 
@@ -57,7 +78,27 @@ Publishable keyは `app.js` に設定済みです。Secret keyはブラウザ用
 3. `Run` を押します。
 4. アプリでアカウント作成またはログインします。
 5. 1人目は「新しい家族を作る」を押します。
-6. 2人目以降は、設定画面に表示される招待コードで参加します。
+6. 2人目以降は、設定画面に表示されるファミリーID（紹介コード）で参加します。
+
+ファミリーID参加、猫プロフィール追加・編集、記録保存が止まる場合は、同じ `docs/supabase-join-family.sql` をSupabase SQL Editorでもう一度実行してください。関数と権限設定を上書き更新します。
+
+### 家族メンバーを招待する流れ
+
+親メンバー:
+
+1. ログインします。
+2. 設定画面を開きます。
+3. 「ファミリーID（紹介コード）」を子メンバーへ伝えます。
+
+子メンバー:
+
+1. 最初の画面で「新規登録」を押します。
+2. メールアドレスとパスワードを設定します。
+3. 登録後、ログイン画面へ戻ります。
+4. 「ログイン」を押します。
+5. メールアドレス、パスワード、連携するIDに親メンバーのファミリーIDを入力します。
+6. ファミリーIDが認証されると、同じ家族ページの共有が始まります。
+7. 次回以降は、同じメールアドレスとパスワードだけでログインできます。
 
 ## 保存について
 

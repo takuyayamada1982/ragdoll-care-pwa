@@ -2,11 +2,5 @@
   "name": "ragdoll-care-pwa",
   "version": "0.1.0",
   "private": true,
-  "description": "Mobile-first PWA prototype for shared Ragdoll cat care logs.",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+  "description": "Static mobile-first PWA prototype for shared Ragdoll cat care logs."
 }
