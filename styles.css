@@ -617,6 +617,29 @@ svg {
   background: var(--surface);
 }
 
+.inline-error {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff1ee;
+  color: #7a261d;
+  box-shadow: inset 0 0 0 1px rgba(217, 83, 79, .28);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.inline-error strong {
+  color: #5d1c15;
+}
+
+.form-note {
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .field-grid {
   display: grid;
   gap: 12px;
@@ -637,6 +660,7 @@ svg {
 .field select,
 .field textarea {
   width: 100%;
+  min-width: 0;
   min-height: 44px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -894,6 +918,7 @@ svg {
 .setting-item {
   display: grid;
   gap: 10px;
+  min-width: 0;
   padding: 13px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -905,10 +930,12 @@ svg {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .setting-item h3 {
   margin: 0;
+  min-width: 0;
   font-size: 14px;
 }
 
@@ -923,6 +950,7 @@ svg {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  min-width: 0;
 }
 
 .storage-meter {
@@ -1131,6 +1159,24 @@ svg {
   }
 }
 
+@media (max-width: 430px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-item header {
+    align-items: start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .toast {
+    width: calc(100% - 24px);
+    max-width: calc(100% - 24px);
+    overflow-wrap: anywhere;
+  }
+}
+
 @media (max-width: 370px) {
   .hero {
     min-height: 312px;
@@ -1149,4 +1195,5 @@ svg {
   .quick-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
 }
