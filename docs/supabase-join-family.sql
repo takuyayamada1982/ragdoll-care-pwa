@@ -208,6 +208,22 @@ alter table public.family_members enable row level security;
 alter table public.cats enable row level security;
 alter table public.logs enable row level security;
 
+create or replace function public.is_family_member(target_family_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.family_members
+    where family_id = target_family_id
+      and user_id = auth.uid()
+  );
+$$;
+
+grant execute on function public.is_family_member(uuid) to authenticated;
+
 drop policy if exists "families_select_for_members" on public.families;
 create policy "families_select_for_members"
 on public.families
@@ -253,11 +269,12 @@ with check (
 );
 
 drop policy if exists "family_members_select_own" on public.family_members;
-create policy "family_members_select_own"
+drop policy if exists "family_members_select_for_family" on public.family_members;
+create policy "family_members_select_for_family"
 on public.family_members
 for select
 to authenticated
-using (user_id = auth.uid());
+using (public.is_family_member(family_id));
 
 drop policy if exists "family_members_update_own" on public.family_members;
 create policy "family_members_update_own"

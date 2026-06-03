@@ -156,6 +156,8 @@
         await joinPendingInvite();
         await loadRemoteData();
       } else {
+        clearSavedActiveFamilyId();
+        clearPendingInvite();
         remote = { loading: false, ready: false, family: null, member: null, error: "" };
         render();
       }
@@ -177,7 +179,8 @@
 
     const { data: memberships, error: membershipError } = await supabaseClient
       .from("family_members")
-      .select("id,family_id,display_name,role,created_at")
+      .select("id,family_id,user_id,display_name,role,created_at")
+      .eq("user_id", authSession.user.id)
       .order("created_at", { ascending: true });
 
     if (membershipError) {
@@ -285,6 +288,14 @@
     }
   }
 
+  function clearSavedActiveFamilyId() {
+    try {
+      localStorage.removeItem(ACTIVE_FAMILY_KEY);
+    } catch (error) {
+      // optional cache only
+    }
+  }
+
   function normalizeInviteCode(code) {
     return String(code || "").trim().toUpperCase();
   }
@@ -387,7 +398,7 @@
     return {
       family_id: remote.family.id,
       cat_id: log.catId,
-      member_id: log.memberId || remote.member.id,
+      member_id: getActiveMemberId(),
       type: log.type,
       date_time: log.dateTime,
       status: log.values.status || "",
@@ -959,6 +970,8 @@
               <input id="familyId" type="text" value="${escapeAttr(state.family.id)}">
             </div>
             ${isCloudReady() ? `
+              <p>ログイン中: <strong>${escapeHtml(authSession.user.email || "")}</strong></p>
+              <p>記録者: <strong>${escapeHtml(getActiveMember().name)}</strong></p>
               <p>ファミリーID（紹介コード）: <strong>${escapeHtml(state.family.inviteCode || "")}</strong></p>
               <p>2人目以降はログイン時に、このIDを「連携するID」へ入力します。</p>
               <button class="secondary-action" type="button" data-action="logout">${icon("refresh")}ログアウト</button>
@@ -1758,6 +1771,9 @@
     if (!supabaseClient) return;
     await supabaseClient.auth.signOut();
     authSession = null;
+    authMode = "choice";
+    clearSavedActiveFamilyId();
+    clearPendingInvite();
     remote = { loading: false, ready: false, family: null, member: null, error: "" };
     render();
   }
@@ -1768,10 +1784,11 @@
     const dateTime = fromLocalInputValue(formData.get("dateTime")) || new Date().toISOString();
     const amountRaw = String(formData.get("amount") || "").trim();
     const tags = Array.from(app.querySelectorAll(".tag-button.is-active")).map((button) => button.dataset.tag);
+    const currentMemberId = getActiveMemberId();
     const log = {
       id: createId("log"),
       catId: state.activeCatId,
-      memberId: state.activeMemberId,
+      memberId: currentMemberId,
       type: recordType,
       dateTime,
       values: {
@@ -1804,7 +1821,7 @@
         ...photo,
         id: createId("photo"),
         catId: state.activeCatId,
-        memberId: state.activeMemberId,
+        memberId: currentMemberId,
         dateTime: savedLog.dateTime,
         tags: tags.length ? tags : [typeMeta[recordType].label],
         note: savedLog.note || composeSummary(savedLog),
@@ -1983,6 +2000,7 @@
     showToast("写真を圧縮しています");
     const fileList = Array.from(files).slice(0, 12);
     const dateTime = new Date().toISOString();
+    const currentMemberId = getActiveMemberId();
     const photos = [];
     for (const file of fileList) {
       try {
@@ -1991,7 +2009,7 @@
           ...compressed,
           id: createId("photo"),
           catId: state.activeCatId,
-          memberId: state.activeMemberId,
+          memberId: currentMemberId,
           dateTime,
           tags: ["日常"],
           note: "日常の写真",
@@ -2151,8 +2169,15 @@
     return state.cats.find((cat) => cat.id === state.activeCatId) || state.cats[0];
   }
 
+  function getActiveMemberId() {
+    return isCloudReady() && remote.member ? remote.member.id : state.activeMemberId;
+  }
+
   function getActiveMember() {
-    return state.members.find((member) => member.id === state.activeMemberId) || state.members[0];
+    const activeMemberId = getActiveMemberId();
+    return state.members.find((member) => member.id === activeMemberId)
+      || (remote.member ? memberFromDb(remote.member) : null)
+      || state.members[0];
   }
 
   function memberName(memberId) {
