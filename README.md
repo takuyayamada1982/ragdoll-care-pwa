@@ -38,15 +38,44 @@ http://127.0.0.1:4184/
 - アルバム表示
 - PWA manifest と service worker
 
+## Supabase連携
+
+この版はSupabaseにログインし、家族・猫プロフィール・記録ログを共有できます。
+
+接続先:
+
+```text
+https://ghdsgyqbnhnegbeyeqlt.supabase.co
+```
+
+Publishable keyは `app.js` に設定済みです。Secret keyはブラウザ用アプリには入れません。
+
+### Supabase側で先に行うこと
+
+1. SupabaseのSQL Editorを開きます。
+2. `docs/supabase-join-family.sql` の中身を貼り付けます。
+3. `Run` を押します。
+4. アプリでアカウント作成またはログインします。
+5. 1人目は「新しい家族を作る」を押します。
+6. 2人目以降は、設定画面に表示される招待コードで参加します。
+
 ## 保存について
 
-このプロトタイプはブラウザの `localStorage` に保存します。実運用では、認証、DB、画像ストレージ、権限管理を追加します。
+Supabaseログイン後は、以下が家族間で共有されます。
+
+- 家族グループ
+- 家族メンバーの表示名
+- 猫プロフィール
+- ごはん、体調、行動などの記録ログ
+- 記録内容の編集・削除
+
+写真は容量を抑えるため、アップロード時に圧縮して各端末の `localStorage` に保存します。現時点では写真は家族間共有しません。
 
 ## 実運用での推奨構成
 
-- Frontend: React または Next.js
-- Auth: ファミリーID + 個別ユーザーアカウント
-- DB: PostgreSQL
-- Storage: 画像用 Object Storage
+- Frontend: 今回の静的PWAをベースに改良
+- Auth: Supabase Auth
+- DB: Supabase PostgreSQL
+- Storage: 将来、画像用Supabase Storage
 - PWA: Push通知、オフライン閲覧、ホーム画面追加
 - AI拡張: 週次要約、自然文検索、写真タグ候補、通院レポート

@@ -1,6 +1,19 @@
 (() => {
   const STORAGE_KEY = "ragdoll-care-pwa-state-v1";
+  const ACTIVE_FAMILY_KEY = "ragdoll-care-active-family-id";
+  const SUPABASE_URL = "https://ghdsgyqbnhnegbeyeqlt.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_9uYUtgj-5PCT8BlYKY3zOw_WvkQvutp";
   const app = document.getElementById("app");
+  const hadStoredState = hasStoredState();
+  const supabaseClient = window.supabase
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    })
+    : null;
 
   const typeMeta = {
     meal: { label: "ごはん", icon: "bowl", tone: "teal" },
@@ -88,8 +101,17 @@
   let albumFilter = "all";
   let pendingPhotos = [];
   let activeModalPhotoId = null;
+  let activeEditLogId = null;
   let toastTimer = null;
   let toastMessage = "";
+  let authSession = null;
+  let remote = {
+    loading: Boolean(supabaseClient),
+    ready: false,
+    family: null,
+    member: null,
+    error: supabaseClient ? "" : "Supabaseライブラリを読み込めませんでした"
+  };
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -98,6 +120,233 @@
   }
 
   render();
+  initSupabase();
+  loadHostedSharedData();
+
+  function hasStoredState() {
+    try {
+      return Boolean(localStorage.getItem(STORAGE_KEY));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async function initSupabase() {
+    if (!supabaseClient) {
+      remote.loading = false;
+      render();
+      return;
+    }
+
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) {
+      remote.error = error.message;
+      remote.loading = false;
+      render();
+      return;
+    }
+
+    authSession = data.session;
+    supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+      authSession = session;
+      if (session) {
+        await loadRemoteData();
+      } else {
+        remote = { loading: false, ready: false, family: null, member: null, error: "" };
+        render();
+      }
+    });
+
+    if (authSession) {
+      await loadRemoteData();
+    } else {
+      remote.loading = false;
+      render();
+    }
+  }
+
+  async function loadRemoteData() {
+    if (!authSession) return;
+    remote.loading = true;
+    render();
+
+    const { data: memberships, error: membershipError } = await supabaseClient
+      .from("family_members")
+      .select("id,family_id,display_name,role,created_at")
+      .order("created_at", { ascending: true });
+
+    if (membershipError) {
+      remote = { loading: false, ready: false, family: null, member: null, error: membershipError.message };
+      showToast(`家族データを読めません: ${membershipError.message}`);
+      render();
+      return;
+    }
+
+    if (!memberships || memberships.length === 0) {
+      remote = { loading: false, ready: false, family: null, member: null, error: "" };
+      render();
+      return;
+    }
+
+    const savedFamilyId = getSavedActiveFamilyId();
+    const currentMembership = memberships.find((item) => item.family_id === savedFamilyId) || memberships[0];
+    setSavedActiveFamilyId(currentMembership.family_id);
+
+    const { data: family, error: familyError } = await supabaseClient
+      .from("families")
+      .select("id,name,invite_code,created_at")
+      .eq("id", currentMembership.family_id)
+      .single();
+
+    const { data: allMembers, error: allMembersError } = await supabaseClient
+      .from("family_members")
+      .select("id,family_id,user_id,display_name,role,created_at")
+      .eq("family_id", currentMembership.family_id)
+      .order("created_at", { ascending: true });
+
+    const { data: cats, error: catsError } = await supabaseClient
+      .from("cats")
+      .select("id,family_id,name,breed,coat,birthday,avatar_key,created_at,updated_at")
+      .eq("family_id", currentMembership.family_id)
+      .order("created_at", { ascending: true });
+
+    const { data: logs, error: logsError } = await supabaseClient
+      .from("logs")
+      .select("id,family_id,cat_id,member_id,type,date_time,status,amount,unit,detail,tags,note,created_at,updated_at")
+      .eq("family_id", currentMembership.family_id)
+      .order("date_time", { ascending: false });
+
+    const errors = [familyError, allMembersError, catsError, logsError].filter(Boolean);
+    if (errors.length) {
+      remote.loading = false;
+      remote.error = errors[0].message;
+      showToast(`Supabase読み込みエラー: ${errors[0].message}`);
+      render();
+      return;
+    }
+
+    const nextCats = (cats || []).map(catFromDb);
+    const localPhotos = Array.isArray(state.photos) ? state.photos : [];
+    state = normalizeState({
+      ...state,
+      family: {
+        ...state.family,
+        id: family.name || "RAGDOLL-HOME",
+        supabaseId: family.id,
+        inviteCode: family.invite_code
+      },
+      members: (allMembers || []).map(memberFromDb),
+      activeMemberId: currentMembership.id,
+      cats: nextCats.length ? nextCats : state.cats,
+      activeCatId: nextCats.some((cat) => cat.id === state.activeCatId)
+        ? state.activeCatId
+        : (nextCats[0] && nextCats[0].id) || state.activeCatId,
+      logs: (logs || []).map(logFromDb),
+      photos: localPhotos
+    });
+
+    remote = {
+      loading: false,
+      ready: true,
+      family,
+      member: currentMembership,
+      error: ""
+    };
+    saveState();
+    render();
+  }
+
+  function getSavedActiveFamilyId() {
+    try {
+      return localStorage.getItem(ACTIVE_FAMILY_KEY);
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function setSavedActiveFamilyId(familyId) {
+    try {
+      localStorage.setItem(ACTIVE_FAMILY_KEY, familyId);
+    } catch (error) {
+      // optional cache only
+    }
+  }
+
+  function isCloudReady() {
+    return Boolean(supabaseClient && authSession && remote.ready && remote.family && remote.member);
+  }
+
+  function catFromDb(row) {
+    return {
+      id: row.id,
+      name: row.name || "名前未設定",
+      breed: row.breed || "ラグドール",
+      coat: row.coat || "",
+      birthday: row.birthday || "",
+      avatar: avatarFromKey(row.avatar_key)
+    };
+  }
+
+  function memberFromDb(row) {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      name: row.display_name || (row.role === "owner" ? "オーナー" : "家族"),
+      passLabel: row.role === "owner" ? "オーナー" : "個別PASS"
+    };
+  }
+
+  function logFromDb(row) {
+    return {
+      id: row.id,
+      familyId: row.family_id,
+      catId: row.cat_id,
+      memberId: row.member_id,
+      type: row.type,
+      dateTime: row.date_time,
+      values: {
+        status: row.status || "",
+        amount: row.amount === null || row.amount === undefined ? null : Number(row.amount),
+        unit: row.unit || "",
+        detail: row.detail || ""
+      },
+      tags: Array.isArray(row.tags) ? row.tags : [],
+      note: row.note || ""
+    };
+  }
+
+  function avatarFromKey(key) {
+    const map = {
+      "cat-alert": "assets/cat-alert.svg",
+      "cat-care": "assets/cat-care.svg",
+      "cat-relax": "assets/cat-relax.svg",
+      "cat-sleep": "assets/cat-sleep.svg"
+    };
+    return map[key] || "assets/cat-relax.svg";
+  }
+
+  function avatarKeyFromPath(path) {
+    if (String(path).includes("cat-alert")) return "cat-alert";
+    if (String(path).includes("cat-care")) return "cat-care";
+    if (String(path).includes("cat-sleep")) return "cat-sleep";
+    return "cat-relax";
+  }
+
+  function dbPayloadFromLog(log) {
+    return {
+      family_id: remote.family.id,
+      cat_id: log.catId,
+      member_id: log.memberId || remote.member.id,
+      type: log.type,
+      date_time: log.dateTime,
+      status: log.values.status || "",
+      amount: log.values.amount,
+      unit: log.values.unit || "",
+      detail: log.values.detail || "",
+      tags: log.tags || [],
+      note: log.note || ""
+    };
+  }
 
   function loadState() {
     try {
@@ -122,13 +371,29 @@
         ...cat,
         avatar: cat.avatar === "assets/ragdoll-portrait.svg" ? "assets/cat-relax.svg" : cat.avatar
       })),
-      logs: (Array.isArray(nextState.logs) ? nextState.logs : seeded.logs).map(migrateLogEntry),
-      photos: photos.map((photo) => ({
+      logs: (Array.isArray(nextState.logs) ? nextState.logs : seeded.logs)
+        .filter((log) => !isOldSampleLog(log))
+        .map(migrateLogEntry),
+      photos: photos.filter((photo) => !isOldSamplePhoto(photo)).map((photo) => ({
         ...photo,
         src: migrateSampleArt(photo.src),
         thumb: migrateSampleArt(photo.thumb)
       }))
     };
+  }
+
+  function isOldSampleLog(log) {
+    if (!log || !log.values) return false;
+    const oldNotes = ["朝はすぐ食べた", "状態はいつも通り", "首周りに毛玉少し", "夜は少し残した", "目立つ異変なし"];
+    const oldDetails = ["ドライ", "給水器", "うんち", "窓辺で昼寝", "ブラッシング", "抱っこ測定", "ウェット", "おしっこ"];
+    return (
+      /^log-(meal|water|toilet|behavior|care|weight|health)-/.test(String(log.id || "")) &&
+      (oldNotes.includes(log.note || "") || oldDetails.includes(log.values.detail || ""))
+    );
+  }
+
+  function isOldSamplePhoto(photo) {
+    return ["photo-window", "photo-portrait"].includes(photo && photo.id);
   }
 
   function migrateSampleArt(src) {
@@ -167,17 +432,6 @@
       { id: "member-a", name: "Aさん", passLabel: "個別PASS" },
       { id: "member-b", name: "Bさん", passLabel: "個別PASS" }
     ];
-    const logs = [
-      logSeed(catId, "member-a", "meal", daysAgo(0, 7, 42), { status: "完食", amount: 160, unit: "kcal", detail: "ドライ" }, ["食欲安定"], "朝はすぐ食べた"),
-      logSeed(catId, "member-b", "water", daysAgo(0, 9, 120), { status: "ふつう", amount: 120, unit: "ml", detail: "給水器" }, ["水分安定"], ""),
-      logSeed(catId, "member-a", "toilet", daysAgo(0, 10, 1), { status: "ふつう", amount: 1, unit: "回", detail: "うんち" }, ["うんち"], "状態はいつも通り"),
-      logSeed(catId, "member-b", "behavior", daysAgo(0, 14, 35), { status: "まったり", amount: 35, unit: "分", detail: "窓辺で昼寝" }, ["よく寝た"], ""),
-      logSeed(catId, "member-a", "care", daysAgo(1, 20, 15), { status: "完了", amount: 12, unit: "分", detail: "ブラッシング" }, ["ブラッシング", "毛玉"], "首周りに毛玉少し"),
-      logSeed(catId, "member-a", "weight", daysAgo(2, 21, 0), { status: "測定", amount: 4.6, unit: "kg", detail: "抱っこ測定" }, ["安定"], ""),
-      logSeed(catId, "member-b", "meal", daysAgo(2, 19, 35), { status: "少し残した", amount: 130, unit: "kcal", detail: "ウェット" }, ["残し気味"], "夜は少し残した"),
-      logSeed(catId, "member-a", "toilet", daysAgo(3, 8, 50), { status: "ふつう", amount: 1, unit: "回", detail: "おしっこ" }, ["おしっこ"], ""),
-      logSeed(catId, "member-b", "health", daysAgo(4, 22, 10), { status: "眠そう", amount: 0, unit: "回", detail: "目立つ異変なし" }, ["眠そう"], "")
-    ];
 
     return {
       family: {
@@ -192,82 +446,57 @@
       cats: [
         {
           id: catId,
-          name: "ルナ",
+          name: "猫1",
           breed: "ラグドール",
-          coat: "ブルーポイントバイカラー",
-          birthday: "2023-04-18",
+          coat: "",
+          birthday: "",
           avatar: "assets/cat-relax.svg"
         }
       ],
       activeCatId: catId,
-      logs,
-      photos: [
-        {
-          id: "photo-window",
-          catId,
-          memberId: "member-b",
-          dateTime: daysAgo(0, 14, 40),
-          src: "assets/cat-sleep.svg",
-          thumb: "assets/cat-sleep.svg",
-          tags: ["昼寝", "日常"],
-          note: "窓辺でまったり",
-          linkedLogId: null,
-          sizeLabel: "sample"
-        },
-        {
-          id: "photo-portrait",
-          catId,
-          memberId: "member-a",
-          dateTime: daysAgo(1, 20, 20),
-          src: "assets/cat-care.svg",
-          thumb: "assets/cat-care.svg",
-          tags: ["ケア後"],
-          note: "ブラッシング後",
-          linkedLogId: null,
-          sizeLabel: "sample"
-        }
-      ]
-    };
-  }
-
-  function logSeed(catId, memberId, type, dateTime, values, tags, note) {
-    return {
-      id: `log-${type}-${dateTime.replace(/[-:T]/g, "")}`,
-      catId,
-      memberId,
-      type,
-      dateTime,
-      values,
-      tags,
-      note
+      logs: [],
+      photos: []
     };
   }
 
   function render() {
     const activeCat = getActiveCat();
+    const showMainNav = Boolean(authSession && remote.ready);
     app.innerHTML = `
       <div class="phone-shell">
         ${renderTopbar(activeCat)}
         <main class="screen">${renderScreen(activeCat)}</main>
-        ${renderBottomNav()}
+        ${showMainNav ? renderBottomNav() : ""}
         ${toastMessage ? `<div class="toast">${escapeHtml(toastMessage)}</div>` : ""}
         ${activeModalPhotoId ? renderPhotoModal(activeModalPhotoId) : ""}
+        ${activeEditLogId ? renderEditLogModal(activeEditLogId) : ""}
       </div>
     `;
     bindEvents();
   }
 
   function renderTopbar(activeCat) {
+    const showFamilyInfo = Boolean(authSession && remote.ready);
+    const topbarLabel = showFamilyInfo
+      ? `${state.family.id} / ${activeCat.name}`
+      : authSession
+        ? "家族設定 / ログイン済み"
+        : "家族共有 / ログイン前";
+    const memberLabel = showFamilyInfo
+      ? getActiveMember().name
+      : authSession
+        ? "設定中"
+        : "未ログイン";
     return `
       <header class="topbar">
         <div class="brand">
-          <small>${escapeHtml(state.family.id)} / ${escapeHtml(activeCat.name)}</small>
+          <small>${escapeHtml(topbarLabel)}</small>
           <h1>Ragdoll Care</h1>
         </div>
         <div class="top-actions">
-          <button class="member-pill" type="button" data-action="switch-member" aria-label="記録者を切り替え">
+          <button class="member-pill" type="button" ${showFamilyInfo ? 'data-action="switch-member" aria-label="記録者を切り替え"' : "disabled"}>
             ${icon("user")}
-            <span>${escapeHtml(getActiveMember().name)}</span>
+            <span>${escapeHtml(memberLabel)}</span>
           </button>
           <button class="icon-button" type="button" data-nav="settings" aria-label="設定">
             ${icon("settings")}
@@ -278,12 +507,109 @@
   }
 
   function renderScreen(activeCat) {
+    if (!supabaseClient) return renderConnectionError();
+    if (remote.loading) return renderLoadingScreen();
+    if (!authSession) return renderAuthScreen();
+    if (!remote.ready) return renderFamilySetup();
     if (currentView === "record") return renderRecord(activeCat);
     if (currentView === "diary") return renderDiary(activeCat);
     if (currentView === "insights") return renderInsights(activeCat);
     if (currentView === "album") return renderAlbum(activeCat);
     if (currentView === "settings") return renderSettings(activeCat);
     return renderHome(activeCat);
+  }
+
+  function renderConnectionError() {
+    return `
+      <div class="stack">
+        <section class="form-panel">
+          <div class="section-heading">
+            <h2>接続できません</h2>
+          </div>
+          <p class="today-label">${escapeHtml(remote.error || "Supabaseの読み込みに失敗しました。")}</p>
+        </section>
+      </div>
+    `;
+  }
+
+  function renderLoadingScreen() {
+    return `
+      <div class="stack">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="today-label">Supabase</p>
+            <h2>読み込み中</h2>
+          </div>
+          <div class="state-bubble">家族データを確認しています</div>
+          <img class="state-illustration" src="assets/cat-relax.svg" alt="読み込み中">
+        </section>
+      </div>
+    `;
+  }
+
+  function renderAuthScreen() {
+    return `
+      <div class="stack">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="today-label">Family Login</p>
+            <h2>ログイン</h2>
+          </div>
+          <div class="state-bubble">家族で同じ記録を見られます</div>
+          <img class="state-illustration" src="assets/cat-relax.svg" alt="ログイン">
+          <p>メールアドレスとパスワードでログインします。初めて使う家族はアカウント作成を押してください。</p>
+        </section>
+        <form class="form-panel" id="authForm">
+          <div class="field">
+            <label for="authEmail">メールアドレス</label>
+            <input id="authEmail" name="email" type="email" autocomplete="email" placeholder="name@example.com" required>
+          </div>
+          <div class="field">
+            <label for="authPassword">パスワード</label>
+            <input id="authPassword" name="password" type="password" autocomplete="current-password" minlength="6" required>
+          </div>
+          <div class="field">
+            <label for="authDisplayName">表示名</label>
+            <input id="authDisplayName" name="displayName" type="text" placeholder="Aさん">
+          </div>
+          <button class="primary-action" type="button" data-auth-action="login">${icon("check")}ログイン</button>
+          <button class="secondary-action" type="button" data-auth-action="signup">${icon("plus")}アカウント作成</button>
+        </form>
+      </div>
+    `;
+  }
+
+  function renderFamilySetup() {
+    return `
+      <div class="stack">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="today-label">Family Setup</p>
+            <h2>家族を設定</h2>
+          </div>
+          <div class="state-bubble">最初の家族グループを作ります</div>
+          <img class="state-illustration" src="assets/cat-care.svg" alt="家族設定">
+          <p>最初の人は家族を作成します。2人目以降は、招待コードを入力して参加します。</p>
+        </section>
+        <form class="form-panel" id="familySetupForm">
+          <div class="field">
+            <label for="setupDisplayName">あなたの表示名</label>
+            <input id="setupDisplayName" name="displayName" type="text" placeholder="Aさん" value="${escapeAttr(authSession.user.user_metadata && authSession.user.user_metadata.display_name || "")}">
+          </div>
+          <div class="field">
+            <label for="setupFamilyName">家族名</label>
+            <input id="setupFamilyName" name="familyName" type="text" value="RAGDOLL-HOME">
+          </div>
+          <button class="primary-action" type="button" data-family-action="create">${icon("plus")}新しい家族を作る</button>
+          <div class="field">
+            <label for="setupInviteCode">招待コード</label>
+            <input id="setupInviteCode" name="inviteCode" type="text" placeholder="例: A1B2C3D4">
+          </div>
+          <button class="secondary-action" type="button" data-family-action="join">${icon("check")}招待コードで参加</button>
+          <button class="text-button" type="button" data-action="logout">${icon("refresh")}ログアウト</button>
+        </form>
+      </div>
+    `;
   }
 
   function renderHome(activeCat) {
@@ -395,7 +721,7 @@
             <div class="two-col">
               <div class="field">
                 <label for="recordAmount">${escapeHtml(config.amountLabel)}</label>
-                <input id="recordAmount" name="amount" type="number" inputmode="decimal" step="0.1" placeholder="${escapeAttr(config.unit)}">
+                <input id="recordAmount" name="amount" type="number" inputmode="decimal" step="0.1" placeholder="${escapeAttr(config.unit)}" onfocus="this.select()">
               </div>
               <div class="field">
                 <label for="recordUnit">単位</label>
@@ -521,9 +847,14 @@
               <span class="mini-tag">${escapeHtml(state.family.id)}</span>
             </header>
             <div class="field">
-              <label for="familyId">共有ID</label>
+              <label for="familyId">家族名</label>
               <input id="familyId" type="text" value="${escapeAttr(state.family.id)}">
             </div>
+            ${isCloudReady() ? `
+              <p>招待コード: <strong>${escapeHtml(state.family.inviteCode || "")}</strong></p>
+              <p>2人目以降はログイン後、この招待コードで家族に参加します。</p>
+              <button class="secondary-action" type="button" data-action="logout">${icon("refresh")}ログアウト</button>
+            ` : ""}
           </section>
           <section class="setting-item">
             <header>
@@ -606,7 +937,21 @@
             </div>
             <button class="secondary-action" type="button" data-action="add-demo-cat">${icon("plus")}猫を追加</button>
           </section>
-          <button class="secondary-action" type="button" data-action="reset-demo">${icon("refresh")}サンプルへ戻す</button>
+          <section class="setting-item">
+            <header>
+              <h3>バックアップ</h3>
+              <span class="mini-tag">${isCloudReady() ? "Supabase" : "写真なし"}</span>
+            </header>
+            <p>${isCloudReady() ? "通常の共有はSupabaseで行います。JSONは手元の控え用です。" : "猫、家族、記録だけを書き出します。写真データは含めません。"}</p>
+            <button class="secondary-action" type="button" data-action="export-shared-data">${icon("download")}共有データをダウンロード</button>
+            <label class="upload-box" for="sharedDataInput">
+              ${icon("upload")}
+              <strong>共有データを読み込み</strong>
+              <span>別の端末やGitHubに保存したJSONを反映</span>
+              <input id="sharedDataInput" type="file" accept="application/json,.json">
+            </label>
+          </section>
+          <button class="secondary-action danger-action" type="button" data-action="reset-demo">${icon("refresh")}初期状態に戻す</button>
         </div>
       </div>
     `;
@@ -663,7 +1008,10 @@
         <div class="log-body">
           <div class="log-main">
             <strong>${escapeHtml(composeSummary(log))}</strong>
-            <time>${escapeHtml(formatTime(log.dateTime))}</time>
+            <div class="log-actions">
+              <time>${escapeHtml(formatTime(log.dateTime))}</time>
+              <button class="text-button compact" type="button" data-edit-log="${escapeAttr(log.id)}">${icon("edit")}編集</button>
+            </div>
           </div>
           <p>${escapeHtml(meta.label)} / ${escapeHtml(memberName(log.memberId))}${log.note ? ` / ${escapeHtml(log.note)}` : ""}</p>
           ${log.tags && log.tags.length ? `<div class="tag-row">${log.tags.map((tag) => `<span class="mini-tag">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
@@ -703,6 +1051,63 @@
             <div class="tag-row">${photo.tags.map((tag) => `<span class="mini-tag">${escapeHtml(tag)}</span>`).join("")}</div>
             <button class="primary-action" type="button" data-action="close-modal">${icon("check")}閉じる</button>
           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderEditLogModal(logId) {
+    const log = state.logs.find((item) => item.id === logId);
+    if (!log) return "";
+    const meta = typeMeta[log.type] || typeMeta.health;
+    const config = formConfig[log.type] || formConfig.health;
+    const values = log.values || {};
+    const selectedTags = log.tags || [];
+    return `
+      <div class="modal-backdrop" data-action="close-edit-log">
+        <div class="edit-modal" role="dialog" aria-modal="true" aria-label="記録を編集">
+          <form class="form-panel" id="editLogForm">
+            <div class="section-heading">
+              <h2>${escapeHtml(meta.label)}を編集</h2>
+              <button class="icon-button" type="button" data-action="close-edit-log" aria-label="閉じる">${icon("check")}</button>
+            </div>
+            <div class="field">
+              <label for="editDateTime">日時</label>
+              <input id="editDateTime" name="dateTime" type="datetime-local" value="${escapeAttr(toLocalInputValue(new Date(log.dateTime)))}">
+            </div>
+            <div class="field">
+              <label for="editStatus">状態</label>
+              <select id="editStatus" name="status">
+                ${config.statuses.map((status) => `<option value="${escapeAttr(status)}" ${status === values.status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="two-col">
+              <div class="field">
+                <label for="editAmount">${escapeHtml(config.amountLabel)}</label>
+                <input id="editAmount" name="amount" type="number" inputmode="decimal" step="0.1" value="${values.amount || values.amount === 0 ? escapeAttr(values.amount) : ""}" placeholder="${escapeAttr(config.unit)}" onfocus="this.select()">
+              </div>
+              <div class="field">
+                <label for="editUnit">単位</label>
+                <input id="editUnit" name="unit" type="text" value="${escapeAttr(values.unit || config.unit)}">
+              </div>
+            </div>
+            <div class="field">
+              <label for="editDetail">${escapeHtml(config.detailLabel)}</label>
+              <input id="editDetail" name="detail" type="text" value="${escapeAttr(values.detail || "")}" placeholder="${escapeAttr(config.detailPlaceholder)}">
+            </div>
+            <div class="field">
+              <label>タグ</label>
+              <div class="tag-picker">
+                ${config.tags.map((tag) => `<button class="tag-button ${selectedTags.includes(tag) ? "is-active" : ""}" type="button" data-edit-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>`).join("")}
+              </div>
+            </div>
+            <div class="field">
+              <label for="editNote">メモ</label>
+              <textarea id="editNote" name="note">${escapeHtml(log.note || "")}</textarea>
+            </div>
+            <button class="primary-action" type="submit">${icon("check")}変更を保存</button>
+            <button class="secondary-action danger-action" type="button" data-action="delete-edit-log">${icon("trash")}この記録を削除</button>
+          </form>
         </div>
       </div>
     `;
@@ -771,6 +1176,12 @@
       });
     });
 
+    app.querySelectorAll("[data-edit-tag]").forEach((button) => {
+      button.addEventListener("click", () => {
+        button.classList.toggle("is-active");
+      });
+    });
+
     app.querySelectorAll("[data-photo]").forEach((button) => {
       button.addEventListener("click", () => {
         activeModalPhotoId = button.dataset.photo;
@@ -778,9 +1189,21 @@
       });
     });
 
+    app.querySelectorAll("[data-edit-log]").forEach((button) => {
+      button.addEventListener("click", () => {
+        activeEditLogId = button.dataset.editLog;
+        render();
+      });
+    });
+
     const recordForm = app.querySelector("#recordForm");
     if (recordForm) {
       recordForm.addEventListener("submit", onSubmitRecord);
+    }
+
+    const editLogForm = app.querySelector("#editLogForm");
+    if (editLogForm) {
+      editLogForm.addEventListener("submit", onSubmitEditLog);
     }
 
     const recordPhotoInput = app.querySelector("#recordPhotoInput");
@@ -792,6 +1215,19 @@
     if (albumPhotoInput) {
       albumPhotoInput.addEventListener("change", (event) => handleAlbumPhotos(event.target.files));
     }
+
+    const sharedDataInput = app.querySelector("#sharedDataInput");
+    if (sharedDataInput) {
+      sharedDataInput.addEventListener("change", (event) => handleSharedDataFile(event.target.files && event.target.files[0]));
+    }
+
+    app.querySelectorAll("[data-auth-action]").forEach((button) => {
+      button.addEventListener("click", () => handleAuth(button.dataset.authAction));
+    });
+
+    app.querySelectorAll("[data-family-action]").forEach((button) => {
+      button.addEventListener("click", () => handleFamilyAction(button.dataset.familyAction));
+    });
 
     const diaryDateInput = app.querySelector("#diaryDate");
     if (diaryDateInput) {
@@ -817,6 +1253,7 @@
 
     app.querySelectorAll("[data-action]").forEach((element) => {
       element.addEventListener("click", (event) => {
+        if (element.classList.contains("modal-backdrop") && event.target !== element) return;
         const action = element.dataset.action;
         if (action === "switch-member") switchMember();
         if (action === "today") {
@@ -828,8 +1265,19 @@
           activeModalPhotoId = null;
           render();
         }
+        if (action === "close-edit-log") {
+          event.stopPropagation();
+          activeEditLogId = null;
+          render();
+        }
+        if (action === "delete-edit-log") {
+          event.stopPropagation();
+          deleteActiveLog();
+        }
         if (action === "add-demo-cat") addDemoCat();
         if (action === "reset-demo") resetDemo();
+        if (action === "export-shared-data") exportSharedData();
+        if (action === "logout") logout();
       });
     });
 
@@ -839,8 +1287,15 @@
   function bindSettingsInputs() {
     const familyId = app.querySelector("#familyId");
     if (familyId) {
-      familyId.addEventListener("change", () => {
+      familyId.addEventListener("change", async () => {
         state.family.id = familyId.value.trim() || "RAGDOLL-HOME";
+        if (isCloudReady()) {
+          const { error } = await supabaseClient
+            .from("families")
+            .update({ name: state.family.id })
+            .eq("id", remote.family.id);
+          if (error) showToast(`家族名を保存できません: ${error.message}`);
+        }
         saveState();
         render();
       });
@@ -887,7 +1342,12 @@
         if (shouldRender) render();
       };
       input.addEventListener("input", () => updateCat(false));
-      input.addEventListener("change", () => updateCat(true));
+      input.addEventListener("change", async () => {
+        updateCat(false);
+        const cat = state.cats.find((item) => item.id === input.dataset.catId);
+        if (cat) await updateRemoteCat(cat);
+        render();
+      });
     });
 
     const quality = app.querySelector("#imageQuality");
@@ -900,7 +1360,156 @@
     }
   }
 
-  function onSubmitRecord(event) {
+  async function handleAuth(action) {
+    const form = app.querySelector("#authForm");
+    if (!form || !supabaseClient) return;
+    const formData = new FormData(form);
+    const email = String(formData.get("email") || "").trim();
+    const password = String(formData.get("password") || "");
+    const displayName = String(formData.get("displayName") || "").trim();
+
+    if (!email || !password) {
+      showToast("メールアドレスとパスワードを入力してください");
+      return;
+    }
+
+    remote.loading = true;
+    render();
+
+    if (action === "signup") {
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { display_name: displayName }
+        }
+      });
+      remote.loading = false;
+      if (error) {
+        showToast(`アカウント作成エラー: ${error.message}`);
+        render();
+        return;
+      }
+      if (!data.session) {
+        showToast("確認メールを送信しました。メール内のリンクを押してからログインしてください。");
+        render();
+        return;
+      }
+      authSession = data.session;
+      await loadRemoteData();
+      return;
+    }
+
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      remote.loading = false;
+      showToast(`ログインエラー: ${error.message}`);
+      render();
+      return;
+    }
+    authSession = data.session;
+    await loadRemoteData();
+  }
+
+  async function handleFamilyAction(action) {
+    const form = app.querySelector("#familySetupForm");
+    if (!form || !authSession) return;
+    const formData = new FormData(form);
+    const displayName = String(formData.get("displayName") || "").trim() || "家族";
+    const familyName = String(formData.get("familyName") || "").trim() || "RAGDOLL-HOME";
+    const inviteCode = String(formData.get("inviteCode") || "").trim();
+
+    remote.loading = true;
+    render();
+
+    if (action === "create") {
+      const { data: rpcFamilyId, error: rpcError } = await supabaseClient
+        .rpc("create_family_with_default_cat", {
+          family_name: familyName,
+          member_display_name: displayName
+        });
+
+      if (!rpcError && rpcFamilyId) {
+        setSavedActiveFamilyId(rpcFamilyId);
+        await loadRemoteData();
+        showToast("家族を作成しました。設定から招待コードを確認できます");
+        return;
+      }
+
+      console.warn("create_family_with_default_cat failed. Falling back to table insert.", rpcError);
+      const { data: family, error: familyError } = await supabaseClient
+        .from("families")
+        .insert({ name: familyName })
+        .select("id,name,invite_code")
+        .single();
+
+      if (familyError) {
+        remote.loading = false;
+        showToast(`家族作成エラー: ${familyError.message}`);
+        render();
+        return;
+      }
+
+      await supabaseClient
+        .from("family_members")
+        .update({ display_name: displayName })
+        .eq("family_id", family.id)
+        .eq("user_id", authSession.user.id);
+
+      const { error: catError } = await supabaseClient
+        .from("cats")
+        .insert({
+          family_id: family.id,
+          name: "猫1",
+          breed: "ラグドール",
+          coat: "",
+          avatar_key: "cat-relax"
+        });
+
+      if (catError) {
+        showToast(`猫プロフィール作成エラー: ${catError.message}`);
+      }
+
+      setSavedActiveFamilyId(family.id);
+      await loadRemoteData();
+      showToast(`家族を作成しました。招待コード: ${family.invite_code}`);
+      return;
+    }
+
+    if (!inviteCode) {
+      remote.loading = false;
+      showToast("招待コードを入力してください");
+      render();
+      return;
+    }
+
+    const { data: familyId, error } = await supabaseClient
+      .rpc("join_family_by_invite_code", {
+        target_invite_code: inviteCode,
+        member_display_name: displayName
+      });
+
+    if (error) {
+      remote.loading = false;
+      showToast(`参加エラー: ${error.message}`);
+      render();
+      return;
+    }
+
+    setSavedActiveFamilyId(familyId);
+    await loadRemoteData();
+    showToast("家族に参加しました");
+  }
+
+  async function logout() {
+    if (!supabaseClient) return;
+    await supabaseClient.auth.signOut();
+    authSession = null;
+    remote = { loading: false, ready: false, family: null, member: null, error: "" };
+    render();
+  }
+
+  async function onSubmitRecord(event) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const dateTime = fromLocalInputValue(formData.get("dateTime")) || new Date().toISOString();
@@ -922,17 +1531,31 @@
       note: String(formData.get("note") || "").trim()
     };
 
-    state.logs.push(log);
+    let savedLog = log;
+    if (isCloudReady()) {
+      const { data, error } = await supabaseClient
+        .from("logs")
+        .insert(dbPayloadFromLog(log))
+        .select("id,family_id,cat_id,member_id,type,date_time,status,amount,unit,detail,tags,note,created_at,updated_at")
+        .single();
+      if (error) {
+        showToast(`記録を保存できません: ${error.message}`);
+        return;
+      }
+      savedLog = logFromDb(data);
+    }
+
+    state.logs.push(savedLog);
     pendingPhotos.forEach((photo) => {
       state.photos.push({
         ...photo,
         id: createId("photo"),
         catId: state.activeCatId,
         memberId: state.activeMemberId,
-        dateTime,
+        dateTime: savedLog.dateTime,
         tags: tags.length ? tags : [typeMeta[recordType].label],
-        note: log.note || composeSummary(log),
-        linkedLogId: log.id
+        note: savedLog.note || composeSummary(savedLog),
+        linkedLogId: savedLog.id
       });
     });
 
@@ -940,7 +1563,149 @@
     state.photos.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
     pendingPhotos = [];
     if (saveState()) showToast(`${typeMeta[recordType].label}を保存しました`);
+    if (isCloudReady()) await loadRemoteData();
     render();
+  }
+
+  async function onSubmitEditLog(event) {
+    event.preventDefault();
+    const log = state.logs.find((item) => item.id === activeEditLogId);
+    if (!log) return;
+    const formData = new FormData(event.currentTarget);
+    const amountRaw = String(formData.get("amount") || "").trim();
+    log.dateTime = fromLocalInputValue(formData.get("dateTime")) || log.dateTime;
+    log.values = {
+      status: String(formData.get("status") || ""),
+      amount: amountRaw === "" ? null : Number(amountRaw),
+      unit: String(formData.get("unit") || (formConfig[log.type] || {}).unit || ""),
+      detail: String(formData.get("detail") || "")
+    };
+    log.tags = Array.from(app.querySelectorAll("[data-edit-tag].is-active")).map((button) => button.dataset.editTag);
+    log.note = String(formData.get("note") || "").trim();
+
+    if (isCloudReady()) {
+      const { error } = await supabaseClient
+        .from("logs")
+        .update(dbPayloadFromLog(log))
+        .eq("id", log.id)
+        .eq("family_id", remote.family.id);
+      if (error) {
+        showToast(`記録を更新できません: ${error.message}`);
+        return;
+      }
+    }
+
+    state.logs.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+    activeEditLogId = null;
+    if (saveState()) showToast("記録を更新しました");
+    if (isCloudReady()) await loadRemoteData();
+    render();
+  }
+
+  async function deleteActiveLog() {
+    if (!activeEditLogId) return;
+    if (!window.confirm("この記録を削除しますか？")) return;
+
+    if (isCloudReady()) {
+      const { error } = await supabaseClient
+        .from("logs")
+        .delete()
+        .eq("id", activeEditLogId)
+        .eq("family_id", remote.family.id);
+      if (error) {
+        showToast(`記録を削除できません: ${error.message}`);
+        return;
+      }
+    }
+
+    state.logs = state.logs.filter((log) => log.id !== activeEditLogId);
+    state.photos = state.photos.map((photo) =>
+      photo.linkedLogId === activeEditLogId ? { ...photo, linkedLogId: null } : photo
+    );
+    activeEditLogId = null;
+    if (saveState()) showToast("記録を削除しました");
+    if (isCloudReady()) await loadRemoteData();
+    render();
+  }
+
+  function getShareableState() {
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      family: state.family,
+      members: state.members,
+      activeMemberId: state.activeMemberId,
+      cats: state.cats,
+      activeCatId: state.activeCatId,
+      logs: state.logs
+    };
+  }
+
+  function exportSharedData() {
+    const data = JSON.stringify(getShareableState(), null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "shared-state.json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast("写真なし共有データを書き出しました");
+  }
+
+  function importSharedData(shared) {
+    if (!shared || !Array.isArray(shared.cats) || !Array.isArray(shared.logs)) {
+      showToast("共有データの形式が違います");
+      return;
+    }
+    const normalized = normalizeState({
+      ...state,
+      family: shared.family || state.family,
+      members: Array.isArray(shared.members) ? shared.members : state.members,
+      activeMemberId: shared.activeMemberId || state.activeMemberId,
+      cats: shared.cats,
+      activeCatId: shared.activeCatId || shared.cats[0].id,
+      logs: shared.logs,
+      photos: state.photos
+    });
+    state = normalized;
+    if (!state.cats.some((cat) => cat.id === state.activeCatId)) {
+      state.activeCatId = state.cats[0].id;
+    }
+    if (!state.members.some((member) => member.id === state.activeMemberId)) {
+      state.activeMemberId = state.members[0].id;
+    }
+    saveState();
+    showToast("共有データを読み込みました");
+    render();
+  }
+
+  function handleSharedDataFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onerror = () => showToast("共有データを読み込めませんでした");
+    reader.onload = () => {
+      try {
+        importSharedData(JSON.parse(reader.result));
+      } catch (error) {
+        showToast("JSONとして読み込めませんでした");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  async function loadHostedSharedData() {
+    if (supabaseClient) return;
+    if (hadStoredState) return;
+    try {
+      const response = await fetch(`shared-state.json?ts=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) return;
+      importSharedData(await response.json());
+    } catch (error) {
+      // Hosted shared data is optional.
+    }
   }
 
   async function handlePhotoFiles(files, rerenderAfter) {
@@ -1025,6 +1790,10 @@
   }
 
   function switchMember() {
+    if (isCloudReady()) {
+      showToast("Supabase連携中はログイン中のユーザーで記録します");
+      return;
+    }
     const index = state.members.findIndex((member) => member.id === state.activeMemberId);
     const next = state.members[(index + 1) % state.members.length];
     state.activeMemberId = next.id;
@@ -1043,11 +1812,54 @@
       birthday: "",
       avatar: "assets/cat-relax.svg"
     };
+    if (isCloudReady()) {
+      addRemoteCat(cat);
+      return;
+    }
     state.cats.push(cat);
     state.activeCatId = cat.id;
     saveState();
     showToast("猫プロフィールを追加しました");
     render();
+  }
+
+  async function addRemoteCat(cat) {
+    const { data, error } = await supabaseClient
+      .from("cats")
+      .insert({
+        family_id: remote.family.id,
+        name: cat.name,
+        breed: cat.breed,
+        coat: cat.coat,
+        birthday: cat.birthday || null,
+        avatar_key: avatarKeyFromPath(cat.avatar)
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      showToast(`猫を追加できません: ${error.message}`);
+      return;
+    }
+    state.activeCatId = data.id;
+    await loadRemoteData();
+    showToast("猫プロフィールを追加しました");
+  }
+
+  async function updateRemoteCat(cat) {
+    if (!isCloudReady()) return;
+    const { error } = await supabaseClient
+      .from("cats")
+      .update({
+        name: cat.name || "名前未設定",
+        breed: cat.breed || "ラグドール",
+        coat: cat.coat || "",
+        birthday: cat.birthday || null,
+        avatar_key: avatarKeyFromPath(cat.avatar)
+      })
+      .eq("id", cat.id)
+      .eq("family_id", remote.family.id);
+    if (error) showToast(`猫プロフィールを保存できません: ${error.message}`);
   }
 
   function resetDemo() {
@@ -1059,7 +1871,7 @@
     diaryFilter = "all";
     pendingPhotos = [];
     saveState();
-    showToast("サンプル状態に戻しました");
+    showToast("初期状態に戻しました");
     render();
   }
 
@@ -1231,6 +2043,10 @@
       settings: ["M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-1.9.3l-.2.1a1.7 1.7 0 0 0-.5 1.8V23h-4v-.5a1.7 1.7 0 0 0-.5-1.8l-.2-.1a1.7 1.7 0 0 0-1.9-.3l-.2.1-2-3.4.1-.1A1.7 1.7 0 0 0 4.6 15v-.2a1.7 1.7 0 0 0-1.4-1.2H3V10h.2a1.7 1.7 0 0 0 1.4-1.2v-.2a1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-3.4.2.1a1.7 1.7 0 0 0 1.9-.3l.2-.1A1.7 1.7 0 0 0 10.8 1h2.4a1.7 1.7 0 0 0 .5 1.8l.2.1a1.7 1.7 0 0 0 1.9.3l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9v.2A1.7 1.7 0 0 0 20.8 10h.2v3.6h-.2a1.7 1.7 0 0 0-1.4 1.2v.2z"],
       home: ["M3 11 12 3l9 8", "M5 10v10h14V10", "M9 20v-6h6v6"],
       plus: ["M12 5v14", "M5 12h14"],
+      edit: ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5z"],
+      trash: ["M3 6h18", "M8 6V4h8v2", "M7 10v10h10V10"],
+      download: ["M12 3v12", "M7 10l5 5 5-5", "M5 21h14"],
+      upload: ["M12 21V9", "M7 14l5-5 5 5", "M5 3h14"],
       calendar: ["M8 2v4", "M16 2v4", "M3 9h18", "M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2z"],
       chart: ["M4 19V5", "M4 19h16", "M8 15l3-4 3 2 4-7"],
       check: ["M20 6 9 17l-5-5"],
